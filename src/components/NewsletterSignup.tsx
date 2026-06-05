@@ -2,12 +2,9 @@
 
 import { useState, type FormEvent } from "react";
 
-const LISTMONK_URL = process.env.NEXT_PUBLIC_LISTMONK_URL;
-const LISTMONK_LIST_UUID = process.env.NEXT_PUBLIC_LISTMONK_LIST_UUID;
-
 export function NewsletterSignup() {
   const [status, setStatus] = useState<
-    { type: "success" | "error" | "idle"; message: string } | null
+    { type: "success" | "error"; message: string } | null
   >(null);
   const [loading, setLoading] = useState(false);
 
@@ -21,29 +18,23 @@ export function NewsletterSignup() {
       return;
     }
 
-    if (!LISTMONK_URL || !LISTMONK_LIST_UUID) {
-      setStatus({
-        type: "error",
-        message: "Newsletter is not configured yet. Please try again later.",
-      });
-      return;
-    }
-
     setLoading(true);
     setStatus(null);
 
     try {
-      const res = await fetch(`${LISTMONK_URL}/subscription/form`, {
+      const res = await fetch("/api/subscribe", {
         method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ email, l: LISTMONK_LIST_UUID }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
       });
 
-      if (res.ok || res.status === 302) {
+      const data = await res.json();
+
+      if (res.ok && data.success) {
         setStatus({ type: "success", message: "You're in! Welcome to West Africa Briefs." });
         (e.target as HTMLFormElement).reset();
       } else {
-        setStatus({ type: "error", message: "Something went wrong. Please try again." });
+        setStatus({ type: "error", message: data.error || "Something went wrong. Please try again." });
       }
     } catch {
       setStatus({ type: "error", message: "Network error. Please try again later." });
