@@ -1,29 +1,56 @@
 "use client";
 
-import { useActionState } from "react";
-import { subscribeToList } from "@/app/actions/subscribe";
+import { useState, type FormEvent } from "react";
 
-const initialState = { success: false, message: "" };
-
-function SubmitButton({ pending }: { pending: boolean }) {
-  return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="px-6 py-2.5 rounded-button bg-accent-gold text-bg-primary font-semibold text-sm hover:bg-accent-gold-dark transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-    >
-      {pending ? "Subscribing..." : "Subscribe"}
-    </button>
-  );
-}
+const LISTMONK_URL = process.env.NEXT_PUBLIC_LISTMONK_URL;
+const LISTMONK_LIST_UUID = process.env.NEXT_PUBLIC_LISTMONK_LIST_UUID;
 
 export function NewsletterSignup() {
-  const [state, formAction, pending] = useActionState(
-    async (_prev: typeof initialState, formData: FormData) => {
-      return await subscribeToList(formData);
-    },
-    initialState
-  );
+  const [status, setStatus] = useState<
+    { type: "success" | "error" | "idle"; message: string } | null
+  >(null);
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const email = formData.get("email") as string;
+
+    if (!email || !email.includes("@")) {
+      setStatus({ type: "error", message: "Please enter a valid email address." });
+      return;
+    }
+
+    if (!LISTMONK_URL || !LISTMONK_LIST_UUID) {
+      setStatus({
+        type: "error",
+        message: "Newsletter is not configured yet. Please try again later.",
+      });
+      return;
+    }
+
+    setLoading(true);
+    setStatus(null);
+
+    try {
+      const res = await fetch(`${LISTMONK_URL}/subscription/form`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ email, l: LISTMONK_LIST_UUID }),
+      });
+
+      if (res.ok || res.status === 302) {
+        setStatus({ type: "success", message: "You're in! Welcome to West Africa Briefs." });
+        (e.target as HTMLFormElement).reset();
+      } else {
+        setStatus({ type: "error", message: "Something went wrong. Please try again." });
+      }
+    } catch {
+      setStatus({ type: "error", message: "Network error. Please try again later." });
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <div className="rounded-card border border-border-subtle bg-bg-card p-6 sm:p-8">
@@ -36,7 +63,7 @@ export function NewsletterSignup() {
           one engaging read. No spam, unsubscribe anytime.
         </p>
         <form
-          action={formAction}
+          onSubmit={handleSubmit}
           className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto"
         >
           <label htmlFor="email" className="sr-only">
@@ -50,18 +77,19 @@ export function NewsletterSignup() {
             required
             className="flex-1 px-4 py-2.5 rounded-button bg-bg-primary border border-border-subtle text-accent-cream placeholder:text-text-muted text-sm focus:outline-none focus:border-accent-gold focus:ring-1 focus:ring-accent-gold/50 transition-colors"
           />
-          <SubmitButton pending={pending} />
-        </form>
-        {state?.message && (
-          <p
-            className={`text-xs mt-3 ${
-              state.success ? "text-accent-gold" : "text-red-400"
-            }`}
+          <button
+            type="submit"
+            disabled={loading}
+            className="px-6 py-2.5 rounded-button bg-accent-gold text-bg-primary font-semibold text-sm hover:bg-accent-gold-dark transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {state.message}
+            {loading ? "Subscribing..." : "Subscribe"}
+          </button>
+        </form>
+        {status ? (
+          <p className={`text-xs mt-3 ${status.type === "success" ? "text-accent-gold" : "text-red-400"}`}>
+            {status.message}
           </p>
-        )}
-        {!state?.message && (
+        ) : (
           <p className="text-text-muted text-xs mt-3">
             Free. Delivered every Sunday morning.
           </p>
